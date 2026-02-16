@@ -1,11 +1,17 @@
+#python -m streamlit run app.py
 import streamlit as st
 import pandas as pd
 from datetime import date
 import os
-from fpdf import FPDF # Importando a biblioteca de PDF
-#python -m streamlit run app.py
-# 1. Configuração da Página
-st.set_page_config(page_title="Sistema de Antecipação", page_icon="🏦", layout="wide")
+from fpdf import FPDF
+
+# --- MUDANÇA 1: Configuração da Página com sua Logo ---
+# Para o ícone na área de trabalho mudar, o arquivo "logo.png" deve estar na mesma pasta do código.
+st.set_page_config(
+    page_title="Sistema de Antecipação", 
+    page_icon="logo.png", # Aqui definimos sua logo como ícone do site/app
+    layout="wide"
+)
 
 # --- FUNÇÕES DE BANCO DE DADOS ---
 DB_FILE = "historico_antecipacoes.csv"
@@ -29,33 +35,37 @@ def salvar_no_historico(cliente, total_bruto, total_liquido, total_juros):
 class PDF(FPDF):
     def header(self):
         if os.path.exists("logo.png"):
-            # x, y, w (ajuste conforme o tamanho da sua logo)
             self.image("logo.png", 10, 8, 33) 
         self.set_font('Arial', 'B', 15)
-        self.cell(80) # Move para a direita
-        self.cell(30, 10, 'Relatório de Antecipação', 0, 0, 'C')
-        self.ln(20) # Quebra de linha
+        self.cell(80) 
+        self.cell(30, 10, 'Relatorio de Antecipacao', 0, 0, 'C')
+        self.ln(20)
 
     def footer(self):
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
-        self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
+        self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
 
-def gerar_pdf(cliente, df_dados, t_bruto, t_juros, t_liq):
+# MUDANÇA 2: Adicionado o parâmetro 'taxa' na função gerar_pdf
+def gerar_pdf(cliente, df_dados, t_bruto, t_juros, t_liq, taxa):
     pdf = PDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
     
     # Cabeçalho do Cliente
-    pdf.set_fill_color(200, 220, 255) # Cor de fundo azul claro
+    pdf.set_fill_color(200, 220, 255) 
     pdf.cell(0, 10, txt=f"Cliente: {cliente}", ln=True, align='L', fill=True)
-    pdf.cell(0, 10, txt=f"Data da Operação: {date.today().strftime('%d/%m/%Y')}", ln=True, align='L')
-    pdf.ln(10)
+    pdf.cell(0, 10, txt=f"Data da Operacao: {date.today().strftime('%d/%m/%Y')}", ln=True, align='L')
+    
+    # EXIBINDO A TAXA NO PDF
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, txt=f"Taxa Mensal Aplicada: {taxa}%", ln=True, align='L')
+    pdf.ln(5)
     
     # Cabeçalho da Tabela
     pdf.set_font("Arial", 'B', 10)
-    col_widths = [40, 40, 20, 40, 40] # Largura das colunas
-    headers = ["Valor Original", "Vencimento", "Dias", "Desconto", "Líquido"]
+    col_widths = [40, 40, 20, 40, 40] 
+    headers = ["Valor Original", "Vencimento", "Dias", "Desconto", "Liquido"]
     
     for i, h in enumerate(headers):
         pdf.cell(col_widths[i], 10, h, 1, 0, 'C')
@@ -76,12 +86,11 @@ def gerar_pdf(cliente, df_dados, t_bruto, t_juros, t_liq):
     # Totais
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(0, 10, f"Total Bruto: R$ {t_bruto:,.2f}", ln=True)
-    pdf.set_text_color(200, 0, 0) # Vermelho
+    pdf.set_text_color(200, 0, 0) 
     pdf.cell(0, 10, f"Total Descontos: - R$ {t_juros:,.2f}", ln=True)
-    pdf.set_text_color(0, 100, 0) # Verde
-    pdf.cell(0, 10, f"Valor Líquido a Pagar: R$ {t_liq:,.2f}", ln=True)
+    pdf.set_text_color(0, 100, 0) 
+    pdf.cell(0, 10, f"Valor Liquido a Pagar: R$ {t_liq:,.2f}", ln=True)
     
-    # Retorna o PDF como string binária
     return pdf.output(dest='S').encode('latin-1')
 
 # --- INTERFACE ---
@@ -100,7 +109,6 @@ with aba1:
         nome_cliente = st.text_input("Nome do Cliente", placeholder="Ex: João Silva")
     with col_tax:
         taxa_mensal = st.selectbox("Taxa Mensal (%)", [2.0, 2.5, 2.8, 3.0, 3.5, 4.0, 5.0], index=3)
-        # MUDANÇA 1: Taxa Diária Simples (Linear)
         taxa_diaria = (taxa_mensal / 100) / 30
 
     if 'cheques' not in st.session_state:
@@ -114,7 +122,6 @@ with aba1:
         if c3.button("➕ Adicionar", use_container_width=True):
             dias = (venc - date.today()).days
             if dias >= 0 and val > 0:
-                # MUDANÇA 2: Cálculo de Desconto Simples
                 desconto = val * (taxa_diaria * dias)
                 v_liq = val - desconto
                 
@@ -134,13 +141,11 @@ with aba1:
         st.divider()
         df = pd.DataFrame(st.session_state['cheques'])
         
-        # Exibição na Tela
         df_show = df.copy()
         for col in ["Valor Original", "Juros", "Líquido"]:
             df_show[col] = df_show[col].map("R$ {:,.2f}".format)
         st.table(df_show.drop(columns=["Cliente"]))
         
-        # Totais\Users\User\Documents\CalcFinanc2\Users\User\Documents\CalcFinanc2
         t_bruto = df["Valor Original"].sum()
         t_juros = df["Juros"].sum()
         t_liq = df["Líquido"].sum()
@@ -153,11 +158,10 @@ with aba1:
         st.divider()
         c_pdf, c_save = st.columns(2)
         
-        # --- BOTÃO DE PDF ---
         with c_pdf:
             if nome_cliente:
-                # Gera o PDF em memória
-                pdf_bytes = gerar_pdf(nome_cliente, df, t_bruto, t_juros, t_liq)
+                # MUDANÇA: Passando o valor de 'taxa_mensal' para a função do PDF
+                pdf_bytes = gerar_pdf(nome_cliente, df, t_bruto, t_juros, t_liq, taxa_mensal)
                 st.download_button(
                     label="📄 Baixar PDF do Relatório",
                     data=pdf_bytes,
@@ -168,7 +172,6 @@ with aba1:
             else:
                 st.warning("Preencha o nome do cliente para liberar o PDF.")
 
-        # --- BOTÃO DE SALVAR ---
         with c_save:
             if st.button("💾 Finalizar e Arquivar", type="primary", use_container_width=True):
                 if nome_cliente:
